@@ -1,0 +1,14 @@
+.Idea/
+
+bin/
+obj/
+.packages/
+.dotnet/
+.probe/
+.run/
+*.user
+*.db
+*.db-wal
+*.db-shm
+logs/
+publish/
