@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>AppActive.Agent</RootNamespace>
+    <AssemblyName>AppActive.Agent</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AppActive.Core\AppActive.Core.csproj" />
+  </ItemGroup>
+
+</Project>

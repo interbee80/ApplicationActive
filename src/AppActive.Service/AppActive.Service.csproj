@@ -1,0 +1,62 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>AppActive.Service</RootNamespace>
+    <AssemblyName>AppActive.Service</AssemblyName>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AppActive.Core\AppActive.Core.csproj" />
+    <!-- Агент собирается вместе со службой; его сборка не подключается, а копируется рядом (см. CopyAgentOutput). -->
+    <ProjectReference Include="..\AppActive.Agent\AppActive.Agent.csproj" ReferenceOutputAssembly="false" Private="false" />
+  </ItemGroup>
+
+  <!-- Web-панель должна работать и при запуске собранного exe из bin, а не только через dotnet run. -->
+  <ItemGroup>
+    <Content Update="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <Target Name="CopyWebRoot" AfterTargets="Build">
+    <ItemGroup>
+      <WebRootFiles Include="$(MSBuildProjectDirectory)\wwwroot\**\*.*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(WebRootFiles)"
+          DestinationFiles="@(WebRootFiles->'$(OutDir)wwwroot\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true"
+          Condition="'@(WebRootFiles)' != ''" />
+  </Target>
+
+  <Target Name="CopyWebRootOnPublish" AfterTargets="Publish">
+    <ItemGroup>
+      <WebRootPublishFiles Include="$(MSBuildProjectDirectory)\wwwroot\**\*.*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(WebRootPublishFiles)"
+          DestinationFiles="@(WebRootPublishFiles->'$(PublishDir)wwwroot\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true"
+          Condition="'@(WebRootPublishFiles)' != ''" />
+  </Target>
+
+  <!-- Агент сеанса кладётся в подкаталог agent рядом со службой. -->
+  <Target Name="CopyAgentOutput" AfterTargets="Build">
+    <ItemGroup>
+      <AgentOutput Include="$(MSBuildThisFileDirectory)..\AppActive.Agent\bin\$(Configuration)\$(TargetFramework)\**\*.*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(AgentOutput)"
+          DestinationFiles="@(AgentOutput->'$(OutDir)agent\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true"
+          Condition="'@(AgentOutput)' != ''" />
+  </Target>
+
+  <Target Name="CopyAgentOnPublish" AfterTargets="Publish">
+    <ItemGroup>
+      <AgentPublishFiles Include="$(MSBuildThisFileDirectory)..\AppActive.Agent\bin\$(Configuration)\$(TargetFramework)\**\*.*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(AgentPublishFiles)"
+          DestinationFiles="@(AgentPublishFiles->'$(PublishDir)agent\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true"
+          Condition="'@(AgentPublishFiles)' != ''" />
+  </Target>
+
+</Project>

@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="light dark" />
+  <meta name="description" content="ApplicationActive — мониторинг активности приложений: время по часам, топ приложений, критическое время, workflow и диагностика." />
+  <title>ApplicationActive — мониторинг активности</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <a class="skip-link" href="#main">Перейти к содержимому</a>
+
+  <div id="offline-banner" class="banner banner-error" role="alert" hidden>
+    <div class="banner-body">
+      <strong class="banner-title">Нет связи со службой ApplicationActive</strong>
+      <div class="banner-text" id="offline-text">Служба не отвечает.</div>
+    </div>
+    <button type="button" class="btn btn-primary" id="offline-retry">Повторить</button>
+  </div>
+
+  <div id="warning-banner" class="banner banner-warn" role="status" hidden>
+    <div class="banner-body">
+      <strong class="banner-title">Часть данных не загружена</strong>
+      <ul class="banner-list" id="warning-list"></ul>
+    </div>
+  </div>
+
+  <header class="app-header">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">AA</span>
+      <span class="brand-text">
+        <strong>ApplicationActive</strong>
+        <small>учёт активности приложений</small>
+      </span>
+    </div>
+
+    <div class="header-bar">
+      <div class="header-group">
+        <label class="field field-inline">
+          <span class="field-label">Дата</span>
+          <input type="date" id="date-input" />
+        </label>
+        <button type="button" class="btn" id="btn-today" title="Показать сегодняшний день">Сегодня</button>
+        <button type="button" class="btn" id="btn-refresh" title="Обновить данные сейчас">Обновить</button>
+      </div>
+
+      <div class="header-group">
+        <label class="switch" title="Автоматически обновлять данные каждые 30 секунд">
+          <input type="checkbox" id="auto-refresh" />
+          <span>Автообновление, 30 с</span>
+        </label>
+        <span class="muted tabular" id="updated-label" aria-live="polite">обновлено —</span>
+        <span class="health" id="health-badge" title="Состояние службы">
+          <span class="dot" aria-hidden="true"></span>
+          <span id="health-text">проверка связи…</span>
+        </span>
+      </div>
+
+      <div class="header-group">
+        <button type="button" class="btn btn-icon" id="btn-theme" title="Тема оформления: как в системе" aria-label="Переключить тему оформления">◐</button>
+        <a class="btn" id="csv-link" href="./api/export/csv" title="Скачать CSV с интервалами за выбранную дату">Экспорт CSV</a>
+        <label class="field field-inline key-field" id="key-field" hidden>
+          <span class="field-label">Ключ администратора</span>
+          <input type="password" id="key-input" autocomplete="off" spellcheck="false" placeholder="X-AppActive-Key" />
+        </label>
+      </div>
+    </div>
+  </header>
+
+  <nav class="tabs" role="tablist" aria-label="Разделы отчёта">
+    <button type="button" class="tab is-active" role="tab" id="tabbtn-overview" aria-controls="panel-overview" aria-selected="true" data-tab="overview">Обзор</button>
+    <button type="button" class="tab" role="tab" id="tabbtn-critical" aria-controls="panel-critical" aria-selected="false" data-tab="critical">Критическое время</button>
+    <button type="button" class="tab" role="tab" id="tabbtn-groups" aria-controls="panel-groups" aria-selected="false" data-tab="groups">Группы</button>
+    <button type="button" class="tab" role="tab" id="tabbtn-workflow" aria-controls="panel-workflow" aria-selected="false" data-tab="workflow">Workflow</button>
+    <button type="button" class="tab" role="tab" id="tabbtn-settings" aria-controls="panel-settings" aria-selected="false" data-tab="settings">Настройки</button>
+    <button type="button" class="tab" role="tab" id="tabbtn-diagnostics" aria-controls="panel-diagnostics" aria-selected="false" data-tab="diagnostics">Диагностика</button>
+  </nav>
+
+  <main id="main">
+    <!-- ============================= ОБЗОР ============================= -->
+    <section class="panel" id="panel-overview" role="tabpanel" aria-labelledby="tabbtn-overview" data-panel="overview">
+      <div class="kpi-grid" id="kpi-cards"></div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>Активность по часам</h2>
+          <span class="muted" id="chart-subtitle"></span>
+        </div>
+        <div class="legend" id="chart-legend"></div>
+        <div class="chart-wrap">
+          <div class="chart-host" id="chart-host"></div>
+          <div class="chart-tooltip" id="chart-tooltip" role="tooltip" hidden></div>
+        </div>
+        <p class="chart-caption" id="chart-caption">
+          По вертикали — суммарное время, по горизонтали — час суток (локальное время сервера), сегмент — приложение.
+          Текущий час выделен. Наведите курсор на столбец, чтобы увидеть разбивку по приложениям.
+        </p>
+        <details class="details" id="hours-details">
+          <summary>Таблица активности по часам (для клавиатуры и чтения с экрана)</summary>
+          <div class="table-scroll" id="hours-table"></div>
+        </details>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>Лента дня</h2>
+          <span class="muted" id="timeline-subtitle"></span>
+        </div>
+        <div id="timeline-host"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>Топ приложений</h2>
+          <span class="muted" id="apps-count"></span>
+        </div>
+        <div class="card-tools">
+          <label class="field field-inline">
+            <span class="field-label">Поиск</span>
+            <input type="search" id="apps-search" placeholder="имя, exe или путь" autocomplete="off" />
+          </label>
+          <button type="button" class="btn" id="apps-search-clear" title="Очистить поиск">Очистить</button>
+        </div>
+        <div class="table-scroll">
+          <table class="table">
+            <thead>
+              <tr>
+                <th scope="col">Приложение</th>
+                <th scope="col" class="num">Время</th>
+                <th scope="col">Доля</th>
+                <th scope="col">Группы</th>
+                <th scope="col">Критическое время</th>
+                <th scope="col">Действия</th>
+              </tr>
+            </thead>
+            <tbody id="apps-table-body"></tbody>
+          </table>
+        </div>
+        <div class="msg" id="apps-msg" role="status" hidden></div>
+      </div>
+
+      <div class="card" id="users-card" hidden>
+        <div class="card-head">
+          <h2>Пользователи</h2>
+          <span class="muted" id="users-subtitle"></span>
+        </div>
+        <div class="bar-list" id="users-host"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>События за сутки</h2>
+          <span class="muted" id="events-count"></span>
+        </div>
+        <div class="feed" id="events-host"></div>
+      </div>
+    </section>
+
+    <!-- ========================= КРИТИЧЕСКОЕ ВРЕМЯ ========================= -->
+    <section class="panel" id="panel-critical" role="tabpanel" aria-labelledby="tabbtn-critical" data-panel="critical" hidden>
+      <div class="card">
+        <div class="card-head">
+          <h2>Использование лимитов</h2>
+          <span class="muted" id="critical-date-label"></span>
+        </div>
+        <div class="critical-list" id="critical-list"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2 id="cr-form-title">Новое правило</h2>
+        </div>
+        <form id="cr-form" novalidate>
+          <div class="form-grid">
+            <label class="field">
+              <span class="field-label">Название правила</span>
+              <input type="text" id="cr-name" maxlength="200" placeholder="Например: Chrome 2 часа" />
+            </label>
+            <label class="field">
+              <span class="field-label">Тип цели</span>
+              <select id="cr-target-type">
+                <option value="app">приложение</option>
+                <option value="group">группа</option>
+              </select>
+            </label>
+            <label class="field" id="cr-target-wrap">
+              <span class="field-label">Цель</span>
+              <select id="cr-target"></select>
+            </label>
+            <label class="field">
+              <span class="field-label">Лимит, минут в сутки</span>
+              <input type="number" id="cr-limit" min="1" max="1440" step="1" value="120" />
+              <span class="field-hint" id="cr-limit-hint">Сохраняется в секундах.</span>
+            </label>
+            <label class="field">
+              <span class="field-label">Важность</span>
+              <select id="cr-severity">
+                <option value="info">информация</option>
+                <option value="warning">предупреждение</option>
+                <option value="critical">критично</option>
+              </select>
+            </label>
+          </div>
+          <fieldset class="fieldset">
+            <legend>Дни недели</legend>
+            <div class="days" id="cr-days">
+              <label class="chip-check"><input type="checkbox" value="1" /><span>Пн</span></label>
+              <label class="chip-check"><input type="checkbox" value="2" /><span>Вт</span></label>
+              <label class="chip-check"><input type="checkbox" value="3" /><span>Ср</span></label>
+              <label class="chip-check"><input type="checkbox" value="4" /><span>Чт</span></label>
+              <label class="chip-check"><input type="checkbox" value="5" /><span>Пт</span></label>
+              <label class="chip-check"><input type="checkbox" value="6" /><span>Сб</span></label>
+              <label class="chip-check"><input type="checkbox" value="7" /><span>Вс</span></label>
+            </div>
+            <span class="field-hint">Если не отмечено ни одного дня, правило действует каждый день.</span>
+          </fieldset>
+          <div class="check-row">
+            <label class="switch"><input type="checkbox" id="cr-enabled" checked /><span>Правило включено</span></label>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary" id="cr-save">Сохранить правило</button>
+            <button type="button" class="btn" id="cr-reset">Очистить форму</button>
+            <button type="button" class="btn btn-danger" id="cr-delete" hidden>Удалить правило</button>
+          </div>
+          <div class="msg" id="cr-form-msg" role="status" hidden></div>
+        </form>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>Правила критического времени</h2>
+          <span class="muted" id="cr-count"></span>
+        </div>
+        <div class="table-scroll">
+          <table class="table">
+            <thead>
+              <tr>
+                <th scope="col">Название</th>
+                <th scope="col">Цель</th>
+                <th scope="col" class="num">Лимит</th>
+                <th scope="col">Дни</th>
+                <th scope="col">Важность</th>
+                <th scope="col">Включено</th>
+                <th scope="col">Действия</th>
+              </tr>
+            </thead>
+            <tbody id="cr-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================== ГРУППЫ ============================== -->
+    <section class="panel" id="panel-groups" role="tabpanel" aria-labelledby="tabbtn-groups" data-panel="groups" hidden>
+      <div class="card">
+        <div class="card-head">
+          <h2>Группы приложений</h2>
+          <span class="muted" id="groups-count"></span>
+        </div>
+        <div class="groups" id="groups-list"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2 id="g-form-title">Новая группа</h2>
+        </div>
+        <form id="g-form" novalidate>
+          <div class="form-grid">
+            <label class="field">
+              <span class="field-label">Название группы</span>
+              <input type="text" id="g-name" maxlength="120" placeholder="Например: Браузеры" />
+            </label>
+            <label class="field">
+              <span class="field-label">Описание</span>
+              <input type="text" id="g-desc" maxlength="400" placeholder="Необязательно" />
+            </label>
+            <label class="field">
+              <span class="field-label">Цвет</span>
+              <input type="color" id="g-color" value="#4f8cff" />
+            </label>
+          </div>
+          <fieldset class="fieldset">
+            <legend>Состав группы</legend>
+            <div class="app-picker" id="g-apps"></div>
+            <span class="field-hint" id="g-apps-hint"></span>
+          </fieldset>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary" id="g-save">Сохранить группу</button>
+            <button type="button" class="btn" id="g-reset">Очистить форму</button>
+            <button type="button" class="btn btn-danger" id="g-delete" hidden>Удалить группу</button>
+          </div>
+          <div class="msg" id="g-form-msg" role="status" hidden></div>
+        </form>
+      </div>
+    </section>
+
+    <!-- ============================= WORKFLOW ============================= -->
+    <section class="panel" id="panel-workflow" role="tabpanel" aria-labelledby="tabbtn-workflow" data-panel="workflow" hidden>
+      <div class="card">
+        <div class="card-head">
+          <h2>Правила реакции</h2>
+          <span class="muted" id="wf-count"></span>
+        </div>
+        <div class="card-tools">
+          <button type="button" class="btn btn-primary" id="wf-run" title="Принудительно выполнить движок правил за выбранную дату">Запустить сейчас</button>
+          <span class="muted">Проверка условий и выполнение действий по правилам за выбранную дату.</span>
+        </div>
+        <div class="msg" id="wf-run-result" role="status" hidden></div>
+        <div class="table-scroll">
+          <table class="table">
+            <thead>
+              <tr>
+                <th scope="col">Название</th>
+                <th scope="col">Триггер</th>
+                <th scope="col">Действие</th>
+                <th scope="col" class="num">Пауза</th>
+                <th scope="col">Включено</th>
+                <th scope="col">Последний запуск</th>
+                <th scope="col">Действия</th>
+              </tr>
+            </thead>
+            <tbody id="wf-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2 id="wf-form-title">Новое правило реакции</h2>
+        </div>
+        <form id="wf-form" novalidate>
+          <div class="form-grid">
+            <label class="field">
+              <span class="field-label">Название</span>
+              <input type="text" id="wf-name" maxlength="200" placeholder="Например: Алерт по превышению Chrome" />
+            </label>
+            <label class="field">
+              <span class="field-label">Триггер</span>
+              <select id="wf-trigger">
+                <option value="criticalExceeded">превышение критического правила</option>
+                <option value="schedule">периодическая проверка условия</option>
+              </select>
+            </label>
+            <label class="field" id="wf-critical-wrap">
+              <span class="field-label">Критическое правило</span>
+              <select id="wf-critical-rule"></select>
+            </label>
+            <label class="field" id="wf-schedule-wrap" hidden>
+              <span class="field-label">Период проверки, минут</span>
+              <input type="number" id="wf-schedule" min="1" max="1440" step="1" value="5" />
+            </label>
+            <label class="field" id="wf-target-type-wrap" hidden>
+              <span class="field-label">Тип цели условия</span>
+              <select id="wf-target-type">
+                <option value="app">приложение</option>
+                <option value="group">группа</option>
+              </select>
+            </label>
+            <label class="field" id="wf-target-wrap" hidden>
+              <span class="field-label">Цель условия</span>
+              <select id="wf-target"></select>
+            </label>
+            <label class="field" id="wf-threshold-wrap" hidden>
+              <span class="field-label">Порог, минут за сутки</span>
+              <input type="number" id="wf-threshold" min="1" max="1440" step="1" value="60" />
+              <span class="field-hint">Сохраняется в секундах (`thresholdSeconds`).</span>
+            </label>
+            <label class="field">
+              <span class="field-label">Тип действия</span>
+              <select id="wf-action-type">
+                <option value="event">только событие</option>
+                <option value="script">запуск процесса</option>
+                <option value="webhook">POST JSON на URL</option>
+              </select>
+            </label>
+            <label class="field" id="wf-action-target-wrap" hidden>
+              <span class="field-label">Цель действия (путь или URL)</span>
+              <input type="text" id="wf-action-target" maxlength="500" placeholder="C:\\scripts\\alert.cmd или https://host/hook" />
+            </label>
+            <label class="field">
+              <span class="field-label">Пауза между срабатываниями, минут</span>
+              <input type="number" id="wf-cooldown" min="0" max="10080" step="1" value="60" />
+            </label>
+          </div>
+          <div class="check-row">
+            <label class="switch"><input type="checkbox" id="wf-enabled" checked /><span>Правило включено</span></label>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary" id="wf-save">Сохранить правило</button>
+            <button type="button" class="btn" id="wf-reset">Очистить форму</button>
+            <button type="button" class="btn btn-danger" id="wf-delete" hidden>Удалить правило</button>
+          </div>
+          <div class="msg" id="wf-form-msg" role="status" hidden></div>
+        </form>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>События workflow</h2>
+          <span class="muted" id="wf-events-count"></span>
+        </div>
+        <div class="feed" id="wf-events"></div>
+      </div>
+    </section>
+
+    <!-- ============================ НАСТРОЙКИ ============================ -->
+    <section class="panel" id="panel-settings" role="tabpanel" aria-labelledby="tabbtn-settings" data-panel="settings" hidden>
+      <div class="card">
+        <div class="card-head">
+          <h2>Параметры сбора данных</h2>
+          <span class="muted" id="settings-updated"></span>
+        </div>
+        <form id="settings-form" novalidate>
+          <div class="form-grid">
+            <label class="field">
+              <span class="field-label">Интервал опроса, секунд</span>
+              <input type="number" id="s-poll" min="1" max="3600" step="1" />
+              <span class="field-hint">Как часто агент замеряет активное окно. Больше интервал — меньше нагрузка на ЦП, но ниже детализация.</span>
+            </label>
+            <label class="field">
+              <span class="field-label">Окно активности (клавиатура/мышь), секунд</span>
+              <input type="number" id="s-idle" min="1" max="86400" step="1" />
+              <span class="field-hint">N секунд без ввода — пользователь считается неактивным, время не учитывается.</span>
+            </label>
+            <label class="field">
+              <span class="field-label">Сброс буфера на диск, секунд</span>
+              <input type="number" id="s-flush" min="1" max="600" step="1" />
+              <span class="field-hint">Как часто агент отправляет накопленные интервалы в службу.</span>
+            </label>
+            <label class="field">
+              <span class="field-label">Хранение истории, дней</span>
+              <input type="number" id="s-retention" min="1" max="3650" step="1" />
+              <span class="field-hint">Записи старше указанного срока удаляются автоматически.</span>
+            </label>
+            <label class="field">
+              <span class="field-label">Пульс агента, секунд</span>
+              <input type="number" id="s-heartbeat" min="1" max="3600" step="1" />
+              <span class="field-hint">Интервал служебных отчётов агента без сэмплов активности.</span>
+            </label>
+          </div>
+
+          <div class="check-row">
+            <label class="switch"><input type="checkbox" id="s-monitor" /><span>Мониторинг включён</span></label>
+            <label class="switch"><input type="checkbox" id="s-titles" /><span>Собирать заголовки окон</span></label>
+          </div>
+
+          <label class="field field-wide">
+            <span class="field-label">Игнорируемые процессы (по одному в строке)</span>
+            <textarea id="s-ignore" rows="6" spellcheck="false" placeholder="logonui.exe&#10;lockapp.exe"></textarea>
+            <span class="field-hint">Процессы из списка не учитываются в статистике. Регистр не важен.</span>
+          </label>
+
+          <div class="load-indicator" id="settings-load" role="status"></div>
+
+          <p class="hint">
+            Точность учёта максимальна, когда окно активности N примерно равно интервалу опроса: агент успевает заметить
+            каждое переключение окна и не считает активностью короткие паузы. Если N заметно больше интервала опроса,
+            короткие перерывы в работе могут засчитываться как активность; если меньше — часть быстрых переключений окон теряется.
+          </p>
+
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary" id="s-save">Сохранить настройки</button>
+            <button type="button" class="btn" id="s-reset">Вернуть загруженные значения</button>
+          </div>
+          <div class="msg" id="settings-msg" role="status" hidden></div>
+        </form>
+      </div>
+    </section>
+
+    <!-- =========================== ДИАГНОСТИКА =========================== -->
+    <section class="panel" id="panel-diagnostics" role="tabpanel" aria-labelledby="tabbtn-diagnostics" data-panel="diagnostics" hidden>
+      <div class="card">
+        <div class="card-head">
+          <h2>Служба, ingest и база данных</h2>
+          <button type="button" class="btn" id="diag-refresh" title="Обновить показатели диагностики">Обновить показатели</button>
+        </div>
+        <div class="kv-grid" id="diag-summary"></div>
+        <div class="msg" id="diag-msg" role="status" hidden></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>Агенты</h2>
+          <span class="muted" id="diag-agents-count"></span>
+        </div>
+        <div class="table-scroll">
+          <table class="table">
+            <thead>
+              <tr>
+                <th scope="col" class="num">Сеанс</th>
+                <th scope="col">Пользователь</th>
+                <th scope="col" class="num">PID</th>
+                <th scope="col">Последний отчёт</th>
+                <th scope="col" class="num">ЦП, %</th>
+                <th scope="col" class="num">Память</th>
+                <th scope="col" class="num">Отчётов</th>
+                <th scope="col">Ошибки</th>
+              </tr>
+            </thead>
+            <tbody id="diag-agents-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="app-footer">
+    <span class="muted">ApplicationActive · интерфейс работает офлайн, данные — с локальной службы</span>
+  </footer>
+
+  <div id="toasts" class="toasts" aria-live="polite" aria-atomic="false"></div>
+
+  <noscript>
+    <p class="banner banner-warn">Для работы интерфейса требуется JavaScript.</p>
+  </noscript>
+
+  <script src="./app.js"></script>
+</body>
+</html>

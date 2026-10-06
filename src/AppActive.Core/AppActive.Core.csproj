@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>AppActive.Core</RootNamespace>
+    <AssemblyName>AppActive.Core</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite.Core" Version="7.0.13" />
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="2.1.4" />
+  </ItemGroup>
+
+</Project>

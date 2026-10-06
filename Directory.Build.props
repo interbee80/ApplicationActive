@@ -1,0 +1,30 @@
+<Project>
+
+  <PropertyGroup>
+    <Product>ApplicationActive</Product>
+    <Company>ApplicationActive</Company>
+    <Version>1.0.0</Version>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <InformationalVersion>1.0.0</InformationalVersion>
+    <Copyright>ApplicationActive</Copyright>
+
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+
+    <!-- Не тянем предупреждения анализаторов как ошибки, но держим сборку чистой. -->
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <NoWarn>$(NoWarn);NETSDK1206;CA1416;CS1591</NoWarn>
+
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == '' AND '$(AppActiveSelfContained)' == 'true'">win-x64</RuntimeIdentifier>
+
+    <!-- Офлайн-сборка: не ходить в сеть за данными об уязвимостях (NU1900). -->
+    <NuGetAudit>false</NuGetAudit>
+  </PropertyGroup>
+
+</Project>
